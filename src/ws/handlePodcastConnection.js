@@ -31,10 +31,34 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
       let hasSentDone = false;
       let hasErrored = false;
       let isSessionFinished = false;
+      let progressHeartbeatTimer = null;
+
+      const stopProgressHeartbeat = () => {
+        if (!progressHeartbeatTimer) return;
+        clearInterval(progressHeartbeatTimer);
+        progressHeartbeatTimer = null;
+      };
+
+      const startProgressHeartbeat = () => {
+        stopProgressHeartbeat();
+        progressHeartbeatTimer = setInterval(() => {
+          if (hasSentDone || hasErrored) {
+            stopProgressHeartbeat();
+            return;
+          }
+          sendJson({
+            type: 'status',
+            text: mode === 'url'
+              ? '正在持续生成中，请保持页面打开...'
+              : '正在持续生成话题播客，请稍候...',
+          });
+        }, 10000);
+      };
 
       const finishStream = () => {
         if (hasSentDone || hasErrored) return;
         hasSentDone = true;
+        stopProgressHeartbeat();
         sendJson({ type: 'done' });
       };
 
@@ -98,6 +122,7 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
 
       const connectId = uuidv4();
       sendJson({ type: 'status', text: mode === 'url' ? '正在提交文章链接...' : '正在提交话题...' });
+      startProgressHeartbeat();
 
       if (mode === 'url') {
         fetchUrlMetadataBase(url, config.limits).then(async ({ downloadName, blogTitle, pageText }) => {
@@ -237,11 +262,13 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
       volcWs.on('error', (err) => {
         console.error('[火山引擎连接错误]', err.message);
         hasErrored = true;
+        stopProgressHeartbeat();
         sendJson({ type: 'error', text: buildVolcConnectErrorText(err.message) });
       });
 
       volcWs.on('unexpected-response', (_request, response) => {
         hasErrored = true;
+        stopProgressHeartbeat();
         const code = response?.statusCode;
         const codeHint = code ? `HTTP ${code}` : '上游返回异常';
         console.error('[火山引擎握手异常]', codeHint);
@@ -250,6 +277,7 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
 
       volcWs.on('close', (code, reason) => {
         console.log(`[火山引擎连接关闭] code=${code} reason=${reason}`);
+        stopProgressHeartbeat();
         if (hasErrored || hasSentDone) return;
         if (isSessionFinished || hasReceivedAudio) {
           finishStream();
