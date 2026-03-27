@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 博客播客</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f0f13;
+      --surface: #18181f;
+      --surface2: #22222c;
+      --border: #2e2e3a;
+      --accent: #7c6af7;
+      --accent-light: #a294f9;
+      --text: #e8e8f0;
+      --muted: #9a9aae;
+      --success: #4ade80;
+      --error: #f87171;
+      --radius: 12px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px 80px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      inset: auto;
+      width: 46vw;
+      height: 46vw;
+      min-width: 240px;
+      min-height: 240px;
+      max-width: 520px;
+      max-height: 520px;
+      border-radius: 50%;
+      pointer-events: none;
+      filter: blur(36px);
+      opacity: 0.22;
+      z-index: 0;
+      animation: ambient-float 16s ease-in-out infinite;
+    }
+
+    body::before {
+      top: -80px;
+      left: -120px;
+      background: radial-gradient(circle, rgba(124, 106, 247, 0.95) 0%, rgba(124, 106, 247, 0) 68%);
+    }
+
+    body::after {
+      right: -140px;
+      bottom: 12%;
+      background: radial-gradient(circle, rgba(34, 211, 238, 0.78) 0%, rgba(34, 211, 238, 0) 70%);
+      animation-delay: -7s;
+    }
+
+    body > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .bg-grid,
+    .bg-particles {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .bg-grid {
+      opacity: 0.22;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+      background-size: 28px 28px;
+      mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.92), transparent 82%);
+      animation: grid-drift 18s linear infinite;
+    }
+
+    .bg-grid::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 20% 25%, rgba(124, 106, 247, 0.18), transparent 26%),
+        radial-gradient(circle at 78% 72%, rgba(34, 211, 238, 0.16), transparent 24%);
+      animation: grid-pulse 12s ease-in-out infinite;
+    }
+
+    .bg-particles {
+      overflow: hidden;
+    }
+
+    .bg-particles::before,
+    .bg-particles::after {
+      content: '';
+      position: absolute;
+      inset: -10%;
+      background-repeat: repeat;
+      opacity: 0.34;
+    }
+
+    .bg-particles::before {
+      background-image:
+        radial-gradient(circle, rgba(255, 255, 255, 0.22) 0 1px, transparent 1.8px),
+        radial-gradient(circle, rgba(162, 148, 249, 0.18) 0 1px, transparent 2px);
+      background-size: 120px 120px, 180px 180px;
+      background-position: 0 0, 46px 72px;
+      animation: particles-float 26s linear infinite;
+    }
+
+    .bg-particles::after {
+      background-image:
+        radial-gradient(circle, rgba(34, 211, 238, 0.16) 0 1px, transparent 2px),
+        radial-gradient(circle, rgba(255, 255, 255, 0.1) 0 1px, transparent 1.7px);
+      background-size: 160px 160px, 220px 220px;
+      background-position: 30px 18px, 96px 110px;
+      animation: particles-float-reverse 32s linear infinite;
+    }
+
+    @keyframes ambient-float {
+      0%, 100% {
+        transform: translate3d(0, 0, 0) scale(1);
+      }
+      33% {
+        transform: translate3d(26px, 18px, 0) scale(1.06);
+      }
+      66% {
+        transform: translate3d(-18px, 34px, 0) scale(0.96);
+      }
+    }
+
+    @keyframes grid-drift {
+      from {
+        transform: translate3d(0, 0, 0);
+      }
+      to {
+        transform: translate3d(-28px, -18px, 0);
+      }
+    }
+
+    @keyframes grid-pulse {
+      0%, 100% {
+        opacity: 0.85;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 1;
+        transform: scale(1.04);
+      }
+    }
+
+    @keyframes particles-float {
+      from {
+        transform: translate3d(0, 0, 0);
+      }
+      to {
+        transform: translate3d(-54px, 42px, 0);
+      }
+    }
+
+    @keyframes particles-float-reverse {
+      from {
+        transform: translate3d(0, 0, 0);
+      }
+      to {
+        transform: translate3d(42px, -46px, 0);
+      }
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+      position: relative;
+      z-index: 1;
+    }
+    header .icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+      display: block;
+    }
+    header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent-light), #c4b5fd);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    header p {
+      color: var(--muted);
+      margin-top: 8px;
+      font-size: 14px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 760px;
+      background: rgba(24, 24, 31, 0.74);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 20px;
+      overflow: hidden;
+      position: relative;
+      z-index: 1;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(22px);
+    }
+
+    .card-section {
+      padding: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-section:last-child { border-bottom: none; }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+    }
+
+    input[type="text"], textarea {
+      width: 100%;
+      background: rgba(34, 34, 44, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 15px;
+      padding: 12px 14px;
+      outline: none;
+      transition: border-color 0.2s;
+      font-family: inherit;
+      resize: none;
+    }
+    input[type="text"]:focus, textarea:focus {
+      border-color: var(--accent);
+    }
+    input[type="text"]:focus-visible, textarea:focus-visible {
+      box-shadow: 0 0 0 3px rgba(124, 106, 247, 0.25);
+    }
+    input[type="text"] { font-size: 17px; font-weight: 600; }
+    textarea { line-height: 1.7; min-height: 220px; }
+    .topic-input {
+      font-size: 15px !important;
+      font-weight: 500 !important;
+    }
+
+    .char-count {
+      text-align: right;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .guest-switch {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .guest-card {
+      background: rgba(34, 34, 44, 0.68);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 12px 14px;
+      text-align: left;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .guest-card.active {
+      border-color: var(--accent);
+      background: rgba(124, 106, 247, 0.12);
+      box-shadow: 0 0 0 1px rgba(124, 106, 247, 0.2) inset;
+    }
+
+    .guest-name {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .guest-meta {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .guest-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .guest-pill {
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      color: var(--muted);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .smart-input-shell {
+      position: relative;
+      padding: 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(124, 106, 247, 0.55);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015)),
+        rgba(16, 17, 24, 0.52);
+      box-shadow:
+        0 0 0 1px rgba(124, 106, 247, 0.08) inset,
+        0 18px 48px rgba(0, 0, 0, 0.2);
+    }
+
+    .smart-input-shell::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background:
+        linear-gradient(135deg, rgba(124, 106, 247, 0.22), transparent 34%),
+        linear-gradient(315deg, rgba(34, 211, 238, 0.12), transparent 30%);
+      pointer-events: none;
+      opacity: 0.8;
+    }
+
+    .smart-input-hint {
+      position: relative;
+      z-index: 1;
+      display: block;
+      margin-bottom: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .smart-input-row {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .smart-input {
+      flex: 1;
+      min-width: 0;
+      background: rgba(11, 12, 18, 0.2) !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 14px 6px !important;
+      font-size: 15px !important;
+      font-weight: 500 !important;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .smart-input::placeholder {
+      color: rgba(232, 232, 240, 0.48);
+    }
+
+    .smart-input-action {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--accent), #8b7af8);
+      color: #fff;
+      font-size: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 10px 24px rgba(124, 106, 247, 0.34);
+    }
+
+    .smart-input-action:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .input-tip {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .action-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 20px 24px;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+      font-family: inherit;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    button:focus-visible {
+      outline: 2px solid var(--accent-light);
+      outline-offset: 2px;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      padding: 12px 24px;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-light); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .transcript-section {
+      display: none;
+      padding: 20px 24px 24px;
+      border-top: 1px solid var(--border);
+      background: var(--surface2);
+    }
+
+    .transcript-section.visible {
+      display: block;
+    }
+
+    .transcript-section.animate-in {
+      animation: transcript-fade-in 0.28s ease-out;
+    }
+
+    @keyframes transcript-fade-in {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .transcript-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+    }
+
+    .transcript-list {
+      min-height: 180px;
+      max-height: 260px;
+      overflow-y: auto;
+      padding-right: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .transcript-empty {
+      min-height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .transcript-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-width: 88%;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .transcript-speaker {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent-light);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .speaker-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: currentColor;
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.03);
+    }
+
+    .transcript-text {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .transcript-item.female {
+      align-self: flex-start;
+    }
+
+    .transcript-item.female .transcript-speaker {
+      color: #ff9ad5;
+    }
+
+    .transcript-item.female .transcript-text {
+      background: rgba(255, 154, 213, 0.12);
+      border-color: rgba(255, 154, 213, 0.26);
+    }
+
+    .transcript-item.male {
+      align-self: flex-end;
+      text-align: right;
+    }
+
+    .transcript-item.male .transcript-speaker {
+      color: #7dc4ff;
+      justify-content: flex-end;
+    }
+
+    .transcript-item.male .transcript-text {
+      background: rgba(125, 196, 255, 0.12);
+      border-color: rgba(125, 196, 255, 0.26);
+    }
+
+    .transcript-item.system {
+      align-self: center;
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .transcript-item.system .transcript-speaker {
+      display: none;
+    }
+
+    .transcript-item.system .transcript-text {
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.04);
+      border-style: dashed;
+      text-align: center;
+      margin: 0 auto;
+      max-width: 80%;
+    }
+
+    .transcript-item.error .transcript-speaker,
+    .transcript-item.error .transcript-text {
+      color: var(--error);
+    }
+
+    .transcript-item.latest .transcript-text {
+      box-shadow: 0 0 0 1px rgba(124, 106, 247, 0.25), 0 10px 24px rgba(0, 0, 0, 0.18);
+      transform: translateY(-1px);
+    }
+
+    .player-section {
+      display: none;
+      padding: 20px 24px;
+    }
+    .player-section.visible { display: block; }
+
+    .player-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    audio {
+      width: 100%;
+      height: 44px;
+      accent-color: var(--accent);
+    }
+    audio::-webkit-media-controls-panel {
+      background: var(--surface2);
+    }
+
+    .btn-download {
+      background: transparent;
+      color: var(--muted);
+      padding: 6px 12px;
+      font-size: 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .btn-download:hover { color: var(--text); border-color: var(--accent); }
+    .btn-download.is-disabled {
+      color: #6f7484;
+      border-color: #3c4250;
+      background: rgba(255, 255, 255, 0.02);
+      cursor: not-allowed;
+    }
+    .player-topic {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.5;
+      max-width: 72%;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 28px;
+      transform: translateX(-50%) translateY(14px);
+      background: rgba(21, 24, 31, 0.94);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      padding: 10px 16px;
+      font-size: 13px;
+      line-height: 1.4;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      z-index: 20;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+    }
+
+    .toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 20px 12px 40px;
+      }
+      body::before {
+        top: -120px;
+        left: -140px;
+        opacity: 0.24;
+      }
+      body::after {
+        right: -150px;
+        bottom: 18%;
+        opacity: 0.18;
+      }
+      .bg-grid {
+        opacity: 0.16;
+        background-size: 22px 22px;
+      }
+      .bg-particles::before,
+      .bg-particles::after {
+        opacity: 0.24;
+      }
+      header {
+        margin-bottom: 22px;
+      }
+      header .icon {
+        font-size: 34px;
+        margin-bottom: 10px;
+      }
+      header h1 {
+        font-size: 24px;
+      }
+      .card {
+        border-radius: 18px;
+      }
+      .card-section,
+      .action-bar,
+      .transcript-section,
+      .player-section {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+      .card-section {
+        padding-top: 18px;
+        padding-bottom: 18px;
+      }
+      .guest-switch {
+        grid-template-columns: 1fr;
+      }
+      .guest-card,
+      .btn-primary,
+      .btn-download,
+      .smart-input-action {
+        min-height: 44px;
+      }
+      input[type="text"] {
+        font-size: 16px;
+      }
+      .smart-input {
+        font-size: 14px !important;
+        padding: 12px 4px !important;
+      }
+      .smart-input-shell {
+        padding: 12px;
+        border-radius: 16px;
+      }
+      .smart-input-row {
+        gap: 8px;
+      }
+      .action-bar {
+        padding-top: 16px;
+        padding-bottom: 16px;
+        flex-direction: column;
+      }
+      .btn-primary {
+        width: 100%;
+        justify-content: center;
+      }
+      .transcript-list {
+        min-height: 220px;
+        max-height: 42vh;
+      }
+      .transcript-item {
+        max-width: 94%;
+      }
+      .transcript-text {
+        font-size: 13px;
+        line-height: 1.7;
+      }
+      .player-header {
+        align-items: flex-start;
+        gap: 10px;
+        flex-direction: column;
+      }
+      .player-topic {
+        max-width: 100%;
+        font-size: 16px;
+      }
+      .btn-download {
+        align-self: stretch;
+      }
+      .toast {
+        width: calc(100vw - 24px);
+        max-width: 420px;
+        bottom: 18px;
+        text-align: center;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      body::before,
+      body::after,
+      .bg-grid,
+      .bg-grid::after,
+      .bg-particles::before,
+      .bg-particles::after,
+      .transcript-section.animate-in,
+      .toast,
+      button {
+        animation: none !important;
+        transition: none !important;
+      }
+    }
+
+  </style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="bg-particles"></div>
+
+<header>
+  <span class="icon">🎙️</span>
+  <h1>AI 播客</h1>
+</header>
+
+<div class="card">
+
+  <div class="card-section">
+    <label>嘉宾组合</label>
+    <div class="guest-switch">
+      <button class="guest-card active" id="guestGroupClassic" type="button" onclick="setGuestGroup('classic')">
+        <div>
+          <div class="guest-name">咪仔 × 大壹</div>
+          <div class="guest-meta">默认组合，适合日常博客解读和轻松聊天感播客。</div>
+        </div>
+        <div class="guest-pills">
+          <span class="guest-pill">轻松自然</span>
+          <span class="guest-pill">男女对谈</span>
+        </div>
+      </button>
+      <button class="guest-card" id="guestGroupLiufei" type="button" onclick="setGuestGroup('liufei')">
+        <div>
+          <div class="guest-name">刘飞 × 潇磊</div>
+          <div class="guest-meta">更偏电台访谈感，适合信息密度更高的内容讲述。</div>
+        </div>
+        <div class="guest-pills">
+          <span class="guest-pill">沉稳访谈</span>
+          <span class="guest-pill">双男声</span>
+        </div>
+      </button>
+    </div>
+  </div>
+
+  <div class="card-section">
+    <label>输入内容</label>
+    <div class="smart-input-shell">
+      <div class="smart-input-hint">
+        <span>输入网页链接或一句话话题</span>
+      </div>
+      <div class="smart-input-row">
+        <input class="smart-input" type="text" id="content" placeholder="粘贴网页链接，或输入一个你想聊的话题" />
+        <button class="smart-input-action" id="generateBtn" onclick="generate()" aria-label="生成播客">
+          <span id="btnIcon">▶</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="transcript-section">
+    <div class="transcript-title">播客对话</div>
+    <div class="transcript-list" id="transcriptList">
+      <div class="transcript-empty" id="transcriptEmpty">生成后会在这里实时展示对话人和他们说的话</div>
+    </div>
+  </div>
+
+  <!-- 播放器 -->
+  <div class="player-section" id="playerSection">
+    <div class="player-header">
+      <span class="player-topic" id="playerTopic"></span>
+      <button class="btn-download is-disabled" id="downloadBtn" onclick="download()" aria-disabled="true">下载 MP3</button>
+    </div>
+    <audio id="audioPlayer" controls></audio>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/runtime-config.js"></script>
+<script src="/app.js"></script>
+
+</body>
+</html>

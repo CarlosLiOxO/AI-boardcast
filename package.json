@@ -1,0 +1,16 @@
+{
+  "name": "ai-boardcast",
+  "version": "1.0.0",
+  "description": "博客转AI播客 Demo",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "build:netlify": "node scripts/prepare-netlify.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "uuid": "^9.0.0",
+    "ws": "^8.16.0"
+  }
+}
