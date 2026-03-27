@@ -62,6 +62,17 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
         return `话题生成失败 ${statusCode}: ${detail || '生成失败'}`;
       };
 
+      const buildVolcConnectErrorText = (message) => {
+        const detail = String(message || '');
+        if (detail.includes('401')) {
+          return '连接火山引擎失败：鉴权未通过（401），请检查 VOLC_APP_ID / VOLC_API_KEY / VOLC_APP_KEY / VOLC_WS_URL';
+        }
+        if (detail.includes('403')) {
+          return '连接火山引擎失败：无权限访问（403），请检查资源权限与账户配置';
+        }
+        return mode === 'url' ? `链接生成连接错误：${detail}` : `连接错误: ${detail}`;
+      };
+
       if (!config.volc.appId || !config.volc.apiKey) {
         sendJson({ type: 'error', text: '火山引擎凭证未配置，请在 .env 中设置 VOLC_APP_ID 和 VOLC_API_KEY' });
         return;
@@ -226,7 +237,15 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
       volcWs.on('error', (err) => {
         console.error('[火山引擎连接错误]', err.message);
         hasErrored = true;
-        sendJson({ type: 'error', text: mode === 'url' ? `链接生成连接错误：${err.message}` : `连接错误: ${err.message}` });
+        sendJson({ type: 'error', text: buildVolcConnectErrorText(err.message) });
+      });
+
+      volcWs.on('unexpected-response', (_request, response) => {
+        hasErrored = true;
+        const code = response?.statusCode;
+        const codeHint = code ? `HTTP ${code}` : '上游返回异常';
+        console.error('[火山引擎握手异常]', codeHint);
+        sendJson({ type: 'error', text: buildVolcConnectErrorText(`Unexpected server response: ${code || ''}`) });
       });
 
       volcWs.on('close', (code, reason) => {
