@@ -1,7 +1,7 @@
 const zlib = require('zlib');
 
 const EVENT = {
-  START_SESSION: 100,
+  START_SESSION: 1,
   CONNECTION_FINISHED: 52,
   SESSION_FINISHED: 152,
   USAGE_RESPONSE: 154,
@@ -22,24 +22,16 @@ const GUEST_GROUPS = {
   ],
 };
 
-function buildV3Request(event, sessionId, payload) {
-  const sessionIdBuffer = Buffer.from(sessionId, 'utf-8');
+function buildV3Request(event, _sessionId, payload) {
+  // Frame: [header 4B] [event 4B] [payload_size 4B] [payload JSON]
+  // session_id is passed in payload's input_id field, not as a binary field
   const payloadBuffer = Buffer.from(JSON.stringify(payload), 'utf-8');
   const header = Buffer.from([0x11, 0x14, 0x10, 0x00]);
   const eventBuffer = Buffer.allocUnsafe(4);
-  const sessionIdSizeBuffer = Buffer.allocUnsafe(4);
   const payloadSizeBuffer = Buffer.allocUnsafe(4);
   eventBuffer.writeUInt32BE(event, 0);
-  sessionIdSizeBuffer.writeUInt32BE(sessionIdBuffer.length, 0);
   payloadSizeBuffer.writeUInt32BE(payloadBuffer.length, 0);
-  return Buffer.concat([
-    header,
-    eventBuffer,
-    sessionIdSizeBuffer,
-    sessionIdBuffer,
-    payloadSizeBuffer,
-    payloadBuffer,
-  ]);
+  return Buffer.concat([header, eventBuffer, payloadSizeBuffer, payloadBuffer]);
 }
 
 function parseV3Response(buf) {
