@@ -219,6 +219,12 @@
   }
 
   function resolveWsEndpoint() {
+    const isLocalPage = ['localhost', '127.0.0.1'].includes(location.hostname);
+    if (isLocalPage) {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${protocol}//${location.host}/ws`;
+    }
+
     const configuredBase = (window.__APP_CONFIG__?.WS_BASE_URL || '').trim();
     if (!configuredBase) {
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
