@@ -574,6 +574,10 @@
         return;
       }
       const reasonText = event.reason ? `，原因：${event.reason}` : '';
+      if (event.code === 1006) {
+        failWsOnce(`连接异常中断（1006）。可能是手机网络切换、代理拦截或后端实例重启，请重试并保持网络稳定。目标：${wsEndpoint}`);
+        return;
+      }
       failWsOnce(`连接意外断开（code=${event.code || 'unknown'}${reasonText}）`);
     };
   }

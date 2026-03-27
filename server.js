@@ -34,8 +34,16 @@ wss.on('connection', (clientWs, req) => {
     return;
   }
 
+  const keepAliveTimer = setInterval(() => {
+    if (clientWs.readyState !== WebSocket.OPEN) return;
+    try {
+      clientWs.ping();
+    } catch {}
+  }, 15000);
+
   handlePodcastConnection(clientWs, clientIp);
   clientWs.on('close', () => {
+    clearInterval(keepAliveTimer);
     wsPolicy.removeConnection(clientIp);
   });
 });
