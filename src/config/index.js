@@ -17,6 +17,12 @@ const CONFIG = {
     wsMaxConnectionsPerIp: 3,
     wsMaxGeneratesPerMinute: 5,
   },
+  security: {
+    wsAllowedOrigins: (process.env.WS_ALLOWED_ORIGINS || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean),
+  },
 };
 
 module.exports = { CONFIG };

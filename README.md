@@ -16,6 +16,7 @@
 - `VOLC_APP_KEY`： App Key
 - `VOLC_WS_URL`：可选，播客 WebSocket 地址
 - `RESOURCE_ID`：播客语音合成资源 ID，默认 `volc.service_type.10050`
+- `WS_ALLOWED_ORIGINS`：可选，允许连接后端 WS 的前端来源，逗号分隔
 
 ## Netlify 部署准备
 
@@ -24,4 +25,6 @@
 - Netlify 构建时会执行 `npm run build:netlify` 生成 `public/runtime-config.js`
 - 在 Netlify 环境变量中配置：
   - `PUBLIC_WS_BASE_URL`：后端服务地址，如 `https://your-api.example.com`
+- 在后端环境变量中配置：
+  - `WS_ALLOWED_ORIGINS`：例如 `https://your-site.netlify.app`
 - 前端会自动将 `PUBLIC_WS_BASE_URL` 转换为对应的 `ws/wss` 并拼接 `/ws`

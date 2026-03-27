@@ -24,7 +24,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 wss.on('connection', (clientWs, req) => {
   const clientIp = getClientIp(req);
-  if (!isAllowedWsOrigin(req)) {
+  if (!isAllowedWsOrigin(req, CONFIG.security.wsAllowedOrigins)) {
     clientWs.close(1008, 'Origin not allowed');
     return;
   }
@@ -52,5 +52,8 @@ server.listen(PORT, () => {
   }
   if (!process.env.RESOURCE_ID) {
     console.warn('⚠️  RESOURCE_ID 未配置，当前使用默认值 volc.service_type.10050');
+  }
+  if (CONFIG.security.wsAllowedOrigins.length > 0) {
+    console.log(`🔐 WS 允许跨域来源: ${CONFIG.security.wsAllowedOrigins.join(', ')}`);
   }
 });

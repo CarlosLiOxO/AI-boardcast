@@ -6,13 +6,27 @@ function getClientIp(req) {
   return req.socket.remoteAddress || 'unknown';
 }
 
-function isAllowedWsOrigin(req) {
+function isOriginMatched(origin, rule) {
+  if (!rule) return false;
+  if (rule === '*') return true;
+  if (rule.startsWith('*.')) {
+    const suffix = rule.slice(1).toLowerCase();
+    return origin.toLowerCase().endsWith(suffix);
+  }
+  return origin.toLowerCase() === rule.toLowerCase();
+}
+
+function isAllowedWsOrigin(req, allowedOrigins = []) {
   const origin = req.headers.origin;
   if (!origin) return true;
   try {
     const originUrl = new URL(origin);
     const hostHeader = req.headers.host || '';
-    return originUrl.host === hostHeader;
+    const selfOrigin = `${originUrl.protocol}//${hostHeader}`;
+    if (origin === selfOrigin || originUrl.host === hostHeader) {
+      return true;
+    }
+    return allowedOrigins.some((rule) => isOriginMatched(origin, rule));
   } catch {
     return false;
   }
