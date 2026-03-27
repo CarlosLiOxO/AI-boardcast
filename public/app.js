@@ -481,10 +481,20 @@
       setBlogTitle('正在压缩播客主题...');
     }
 
-    state.ws = new WebSocket(resolveWsEndpoint());
+    const wsEndpoint = resolveWsEndpoint();
+    let wsOpened = false;
+    let wsHandledError = false;
+    const failWsOnce = (text) => {
+      if (wsHandledError) return;
+      wsHandledError = true;
+      onGenerateError(text);
+    };
+
+    state.ws = new WebSocket(wsEndpoint);
     state.ws.binaryType = 'arraybuffer';
 
     state.ws.onopen = () => {
+      wsOpened = true;
       if (state.inputMode === 'url') {
         state.ws.send(JSON.stringify({ type: 'generate', mode: 'url', url, guestGroup: state.selectedGuestGroup }));
         return;
@@ -538,9 +548,22 @@
       }
     };
 
-    state.ws.onerror = () => onGenerateError('WebSocket 连接出错');
-    state.ws.onclose = () => {
-      if (state.generating) onGenerateError('连接意外断开');
+    state.ws.onerror = () => {
+      if (!state.generating) return;
+      failWsOnce(`WebSocket 连接出错（${wsEndpoint}）`);
+    };
+    state.ws.onclose = (event) => {
+      if (!state.generating) return;
+      if (event.code === 1008) {
+        failWsOnce(`连接被后端拒绝（1008）。请在后端 WS_ALLOWED_ORIGINS 加入：${location.origin}`);
+        return;
+      }
+      if (!wsOpened) {
+        failWsOnce(`WebSocket 握手失败（${event.code || 'unknown'}），请检查后端地址：${wsEndpoint}`);
+        return;
+      }
+      const reasonText = event.reason ? `，原因：${event.reason}` : '';
+      failWsOnce(`连接意外断开（code=${event.code || 'unknown'}${reasonText}）`);
     };
   }
 
