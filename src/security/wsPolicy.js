@@ -6,14 +6,20 @@ function getClientIp(req) {
   return req.socket.remoteAddress || 'unknown';
 }
 
+function normalizeOriginValue(value) {
+  return String(value || '').trim().replace(/\/+$/, '');
+}
+
 function isOriginMatched(origin, rule) {
-  if (!rule) return false;
-  if (rule === '*') return true;
-  if (rule.startsWith('*.')) {
-    const suffix = rule.slice(1).toLowerCase();
-    return origin.toLowerCase().endsWith(suffix);
+  const normalizedOrigin = normalizeOriginValue(origin);
+  const normalizedRule = normalizeOriginValue(rule);
+  if (!normalizedRule) return false;
+  if (normalizedRule === '*') return true;
+  if (normalizedRule.startsWith('*.')) {
+    const suffix = normalizedRule.slice(1).toLowerCase();
+    return normalizedOrigin.toLowerCase().endsWith(suffix);
   }
-  return origin.toLowerCase() === rule.toLowerCase();
+  return normalizedOrigin.toLowerCase() === normalizedRule.toLowerCase();
 }
 
 function isAllowedWsOrigin(req, allowedOrigins = []) {
@@ -22,8 +28,9 @@ function isAllowedWsOrigin(req, allowedOrigins = []) {
   try {
     const originUrl = new URL(origin);
     const hostHeader = req.headers.host || '';
-    const selfOrigin = `${originUrl.protocol}//${hostHeader}`;
-    if (origin === selfOrigin || originUrl.host === hostHeader) {
+    const selfOrigin = normalizeOriginValue(`${originUrl.protocol}//${hostHeader}`);
+    const normalizedOrigin = normalizeOriginValue(origin);
+    if (normalizedOrigin === selfOrigin || originUrl.host === hostHeader) {
       return true;
     }
     return allowedOrigins.some((rule) => isOriginMatched(origin, rule));
