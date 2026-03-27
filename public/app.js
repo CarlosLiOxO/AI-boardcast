@@ -483,6 +483,7 @@
 
     const wsEndpoint = resolveWsEndpoint();
     let wsOpened = false;
+    let wsHadErrorEvent = false;
     let wsHandledError = false;
     const failWsOnce = (text) => {
       if (wsHandledError) return;
@@ -550,7 +551,13 @@
 
     state.ws.onerror = () => {
       if (!state.generating) return;
-      failWsOnce(`WebSocket 连接出错（${wsEndpoint}）`);
+      wsHadErrorEvent = true;
+      setTimeout(() => {
+        if (!state.generating || wsHandledError) return;
+        if (state.ws && state.ws.readyState !== WebSocket.OPEN) {
+          failWsOnce(`WebSocket 连接出错（${wsEndpoint}）`);
+        }
+      }, 300);
     };
     state.ws.onclose = (event) => {
       if (!state.generating) return;
@@ -559,6 +566,10 @@
         return;
       }
       if (!wsOpened) {
+        if (wsHadErrorEvent && (event.code === 1006 || event.code === 1015)) {
+          failWsOnce(`WebSocket 握手失败（TLS/网络拦截）。请检查手机网络、VPN/代理与后端证书：${wsEndpoint}`);
+          return;
+        }
         failWsOnce(`WebSocket 握手失败（${event.code || 'unknown'}），请检查后端地址：${wsEndpoint}`);
         return;
       }
