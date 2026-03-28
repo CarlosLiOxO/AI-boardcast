@@ -211,7 +211,7 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
         const reqPayload = {
           input_id: connectId,
           action: mode === 'url' ? 0 : 4,
-          use_head_music: true,
+          use_head_music: false,
           use_tail_music: false,
           input_text: undefined,
           input_info: undefined,
@@ -365,9 +365,18 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
           finishStream();
           return;
         }
+        if (hasReceivedAudio && code === 1005) {
+          sendJson({ type: 'status', text: '上游未返回标准结束帧，已按当前音频内容完成收尾...' });
+          finishStream();
+          return;
+        }
         if (hasReceivedAudio && code === 1000) {
           sendJson({ type: 'status', text: '音频流已结束，正在完成收尾...' });
           finishStream();
+          return;
+        }
+        if (code === 1005 && lastControlFrames.some((frame) => frame.event === EVENT.PODCAST_ROUND_START || frame.round_id !== null)) {
+          sendJson({ type: 'error', text: mode === 'url' ? '上游在正文生成阶段异常关闭（1005），已先关闭片头音乐以规避该问题，请重试' : '上游在正文生成阶段异常关闭（1005），已先关闭片头音乐以规避该问题，请重试' });
           return;
         }
         if (hasReceivedAudio) {
