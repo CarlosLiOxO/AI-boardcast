@@ -266,7 +266,16 @@
 
   function shouldUseHttpStreamMode() {
     const ua = navigator.userAgent || '';
-    return /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isIOS = /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/i.test(ua);
+    const isSamsungBrowser = /SamsungBrowser/i.test(ua);
+    if (isIOS) {
+      return true;
+    }
+    if (isAndroid && (isSamsungBrowser || !canStreamPlay())) {
+      return true;
+    }
+    return false;
   }
 
   function createStreamId() {
@@ -581,9 +590,11 @@
 
     const wsEndpoint = resolveWsEndpoint();
     if (state.useHttpStreamMode) {
+      refs.playerSection.className = 'player-section visible';
       refs.audioPlayer.src = `${resolveHttpStreamBase()}/stream/${state.activeStreamId}.mp3`;
       refs.audioPlayer.preload = 'auto';
       refs.audioPlayer.load();
+      refs.audioPlayer.play().catch(() => {});
     }
     let wsOpened = false;
     let wsHadErrorEvent = false;
