@@ -266,9 +266,7 @@
 
   function shouldUseHttpStreamMode() {
     const ua = navigator.userAgent || '';
-    const isIOS = /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    const isSafari = /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
-    return isIOS && isSafari;
+    return /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   }
 
   function createStreamId() {
@@ -425,7 +423,6 @@
       flushPendingContentAfterTitleResolved();
     }
     if (state.useHttpStreamMode) {
-      refs.playerSection.className = 'player-section visible';
       return;
     }
     state.streamQueue.push(chunk);
@@ -487,15 +484,17 @@
     buildAudioBlob();
     state.nonStreamLastRefreshMs = Date.now();
     setBlogTitle(state.generationTopic || '本次播客');
-    refs.playerSection.className = 'player-section visible';
     setDownloadButtonState(true, '下载本次生成的 MP3');
     if (state.mediaSource) {
+      refs.playerSection.className = 'player-section visible';
       finalizeStreamPlayback();
     } else if (state.useHttpStreamMode) {
+      refs.playerSection.className = 'player-section visible';
       if (!state.userPausedPlayback && refs.audioPlayer.paused) {
         refs.audioPlayer.play().catch(() => {});
       }
     } else {
+      refs.playerSection.className = 'player-section visible';
       const previousObjectUrl = state.objectUrl;
       state.objectUrl = URL.createObjectURL(state.audioBlob);
       swapAudioSourcePreserveProgress(state.objectUrl);
@@ -582,10 +581,9 @@
 
     const wsEndpoint = resolveWsEndpoint();
     if (state.useHttpStreamMode) {
-      refs.playerSection.className = 'player-section visible';
       refs.audioPlayer.src = `${resolveHttpStreamBase()}/stream/${state.activeStreamId}.mp3`;
+      refs.audioPlayer.preload = 'auto';
       refs.audioPlayer.load();
-      refs.audioPlayer.play().catch(() => {});
     }
     let wsOpened = false;
     let wsHadErrorEvent = false;
