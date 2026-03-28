@@ -45,6 +45,7 @@
     nonStreamLastRefreshMs: 0,
     activeStreamId: '',
     useHttpStreamMode: false,
+    hasRevealedGeneratedPanels: false,
     currentPlaceholderIndex: 0,
   };
 
@@ -162,6 +163,7 @@
       state.pendingTranscriptItems.push({ speaker, text, type });
       return;
     }
+    revealGeneratedPanelsOnFirstContent();
     showTranscriptSection();
     refs.transcriptEmpty.style.display = 'none';
     refs.transcriptList.querySelectorAll('.transcript-item.latest').forEach((el) => el.classList.remove('latest'));
@@ -278,6 +280,13 @@
     return false;
   }
 
+  function shouldUseMobileRevealMode() {
+    const ua = navigator.userAgent || '';
+    const isIOS = /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/i.test(ua);
+    return isIOS || isAndroid;
+  }
+
   function createStreamId() {
     if (window.crypto?.randomUUID) {
       return window.crypto.randomUUID();
@@ -319,6 +328,7 @@
     state.nonStreamLastRefreshMs = 0;
     state.activeStreamId = '';
     state.useHttpStreamMode = false;
+    state.hasRevealedGeneratedPanels = false;
     if (refs.audioPlayer.src) {
       state.programmaticPause = true;
       refs.audioPlayer.pause();
@@ -343,6 +353,15 @@
 
   function canStreamPlay() {
     return 'MediaSource' in window && MediaSource.isTypeSupported('audio/mpeg');
+  }
+
+  function revealGeneratedPanelsOnFirstContent() {
+    if (!shouldUseMobileRevealMode() || state.hasRevealedGeneratedPanels) {
+      return;
+    }
+    state.hasRevealedGeneratedPanels = true;
+    showTranscriptSection();
+    refs.playerSection.className = 'player-section visible';
   }
 
   function swapAudioSourcePreserveProgress(nextObjectUrl) {
@@ -432,6 +451,10 @@
       flushPendingContentAfterTitleResolved();
     }
     if (state.useHttpStreamMode) {
+      revealGeneratedPanelsOnFirstContent();
+      if (!state.userPausedPlayback && refs.audioPlayer.paused) {
+        refs.audioPlayer.play().catch(() => {});
+      }
       return;
     }
     state.streamQueue.push(chunk);
@@ -590,11 +613,9 @@
 
     const wsEndpoint = resolveWsEndpoint();
     if (state.useHttpStreamMode) {
-      refs.playerSection.className = 'player-section visible';
       refs.audioPlayer.src = `${resolveHttpStreamBase()}/stream/${state.activeStreamId}.mp3`;
       refs.audioPlayer.preload = 'auto';
       refs.audioPlayer.load();
-      refs.audioPlayer.play().catch(() => {});
     }
     let wsOpened = false;
     let wsHadErrorEvent = false;
@@ -661,6 +682,9 @@
         }
       } else if (msg.type === 'meta') {
         state.downloadFileName = msg.downloadName || state.downloadFileName;
+        if ((msg.blogTitle || msg.downloadName) && state.generating) {
+          revealGeneratedPanelsOnFirstContent();
+        }
         if (state.inputMode !== 'url' && msg.blogTitle) {
           setBlogTitle(msg.blogTitle);
         }
