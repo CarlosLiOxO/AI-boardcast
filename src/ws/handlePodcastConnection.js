@@ -7,11 +7,18 @@ const { fetchUrlMetadataBase, summarizeTitleWithGLM } = require('../services/url
 function createPodcastConnectionHandler({ config, wsPolicy }) {
   return function handlePodcastConnection(clientWs, clientIp) {
     let volcWs = null;
+    let delayedUpstreamCloseTimer = null;
 
     const sendJson = (obj) => {
       if (clientWs.readyState === WebSocket.OPEN) {
         clientWs.send(JSON.stringify(obj));
       }
+    };
+
+    const clearDelayedUpstreamClose = () => {
+      if (!delayedUpstreamCloseTimer) return;
+      clearTimeout(delayedUpstreamCloseTimer);
+      delayedUpstreamCloseTimer = null;
     };
 
     clientWs.on('message', async (raw) => {
@@ -357,6 +364,7 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
       volcWs.on('close', (code, reason) => {
         console.log(`[火山引擎连接关闭] code=${code} reason=${reason}`);
         console.log('[结束帧回顾]', JSON.stringify(lastControlFrames));
+        clearDelayedUpstreamClose();
         stopProgressHeartbeat();
         stopAudioSilenceTimer();
         stopHardStopTimer();
@@ -387,10 +395,19 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
       });
     });
 
-    clientWs.on('close', () => {
-      if (volcWs) {
-        try { volcWs.close(); } catch {}
+    clientWs.on('close', (code, reason) => {
+      console.log(`[客户端连接关闭] code=${code} reason=${reason} upstreamReadyState=${volcWs ? volcWs.readyState : 'none'}`);
+      clearDelayedUpstreamClose();
+      if (!volcWs || volcWs.readyState >= WebSocket.CLOSING) {
+        return;
       }
+      delayedUpstreamCloseTimer = setTimeout(() => {
+        if (!volcWs || volcWs.readyState >= WebSocket.CLOSING) {
+          return;
+        }
+        console.log('[延迟关闭上游连接] client closed earlier, closing volcWs now');
+        try { volcWs.close(); } catch {}
+      }, 2500);
     });
   };
 }
