@@ -352,8 +352,10 @@
     state.audioChunks.push(chunk);
     state.hasReceivedAudio = true;
     if (state.inputMode === 'url' && !state.isUrlTitleResolved) {
-      state.pendingAudioChunks.push(chunk);
-      return;
+      state.isUrlTitleResolved = true;
+      state.generationTopic = state.generationTopic || state.downloadFileName || '链接播客';
+      setBlogTitle(state.generationTopic);
+      flushPendingContentAfterTitleResolved();
     }
     state.streamQueue.push(chunk);
     ensureStreamingPlayer();
@@ -511,15 +513,22 @@
     state.ws.onopen = () => {
       wsOpened = true;
       const wsRef = state.ws;
-      clearInterval(state.wsPingTimer);
-      state.wsPingTimer = setInterval(() => {
+      const sendPing = () => {
         if (state.ws !== wsRef || !state.generating || wsRef.readyState !== WebSocket.OPEN) {
+          return false;
+        }
+        wsRef.send(JSON.stringify({ type: 'ping' }));
+        return true;
+      };
+      clearInterval(state.wsPingTimer);
+      sendPing();
+      state.wsPingTimer = setInterval(() => {
+        if (!sendPing()) {
           clearInterval(state.wsPingTimer);
           state.wsPingTimer = null;
           return;
         }
-        wsRef.send(JSON.stringify({ type: 'ping' }));
-      }, 2000);
+      }, 1000);
       if (state.inputMode === 'url') {
         state.ws.send(JSON.stringify({ type: 'generate', mode: 'url', url, guestGroup: state.selectedGuestGroup }));
         return;
