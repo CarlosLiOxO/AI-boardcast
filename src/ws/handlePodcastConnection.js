@@ -4,7 +4,7 @@ const { EVENT, GUEST_GROUPS, buildV3Request, parseV3Response } = require('../pro
 const { assertPublicHttpUrl } = require('../security/network');
 const { fetchUrlMetadataBase, summarizeTitleWithGLM } = require('../services/urlMetadata');
 
-function createPodcastConnectionHandler({ config, wsPolicy }) {
+function createPodcastConnectionHandler({ config, wsPolicy, liveAudioStreams }) {
   return function handlePodcastConnection(clientWs, clientIp) {
     let volcWs = null;
     let delayedUpstreamCloseTimer = null;
@@ -29,7 +29,14 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
         return;
       }
       if (msg.type !== 'generate') return;
+      const requestedStreamId = typeof msg.streamId === 'string' && msg.streamId
+        ? msg.streamId.replace(/[^\w-]/g, '').slice(0, 80)
+        : '';
       if (!wsPolicy.canStartGenerate(clientIp)) {
+        if (requestedStreamId) {
+          liveAudioStreams.ensureSession(requestedStreamId);
+          liveAudioStreams.abort(requestedStreamId);
+        }
         sendJson({ type: 'error', text: '请求过于频繁，请稍后再试' });
         return;
       }
@@ -127,6 +134,9 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
         stopProgressHeartbeat();
         stopAudioSilenceTimer();
         stopHardStopTimer();
+        if (streamId) {
+          liveAudioStreams.finish(streamId);
+        }
         sendJson({ type: 'done' });
       };
 
@@ -136,6 +146,11 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
         : (typeof msg.text === 'string' ? msg.text.trim() : '');
       const url = typeof msg.url === 'string' ? msg.url.trim() : '';
       const guestGroup = GUEST_GROUPS[msg.guestGroup] ? msg.guestGroup : 'classic';
+      const streamId = requestedStreamId;
+
+      if (streamId) {
+        liveAudioStreams.ensureSession(streamId);
+      }
 
       const buildUserErrorText = (message, statusCode) => {
         const detail = message || '';
@@ -166,6 +181,9 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
       };
 
       if (!config.volc.appId || !config.volc.apiKey) {
+        if (streamId) {
+          liveAudioStreams.abort(streamId);
+        }
         sendJson({ type: 'error', text: '火山引擎凭证未配置，请在 .env 中设置 VOLC_APP_ID 和 VOLC_API_KEY' });
         return;
       }
@@ -174,12 +192,18 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
         try {
           await assertPublicHttpUrl(url);
         } catch (err) {
+          if (streamId) {
+            liveAudioStreams.abort(streamId);
+          }
           sendJson({ type: 'error', text: err.message || '请输入可访问的文章链接' });
           return;
         }
       }
 
       if (mode === 'topic' && !promptText) {
+        if (streamId) {
+          liveAudioStreams.abort(streamId);
+        }
         sendJson({ type: 'error', text: '请输入你想生成播客的话题' });
         return;
       }
@@ -261,6 +285,9 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
           hasReceivedAudio = true;
           scheduleHardStopTimeout();
           scheduleAudioSilenceTimeout();
+          if (streamId) {
+            liveAudioStreams.appendChunk(streamId, Buffer.from(payload));
+          }
           if (clientWs.readyState === WebSocket.OPEN) {
             clientWs.send(payload, { binary: true });
           }
@@ -283,6 +310,9 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
         if (msgType === 0xf || (json.code !== undefined && json.code !== 0)) {
           console.error('[服务端错误]', json);
           hasErrored = true;
+          if (streamId) {
+            liveAudioStreams.abort(streamId);
+          }
           sendJson({ type: 'error', text: buildUserErrorText(json.message || json.error || JSON.stringify(json), code || json.code) });
           return;
         }
@@ -303,6 +333,9 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
           scheduleHardStopTimeout();
           scheduleAudioSilenceTimeout();
           const audioData = Buffer.from(json.data, 'base64');
+          if (streamId) {
+            liveAudioStreams.appendChunk(streamId, audioData);
+          }
           if (clientWs.readyState === WebSocket.OPEN) {
             clientWs.send(audioData, { binary: true });
           }
@@ -347,6 +380,9 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
         stopProgressHeartbeat();
         stopAudioSilenceTimer();
         stopHardStopTimer();
+        if (streamId) {
+          liveAudioStreams.abort(streamId);
+        }
         sendJson({ type: 'error', text: buildVolcConnectErrorText(err.message) });
       });
 
@@ -358,6 +394,9 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
         const code = response?.statusCode;
         const codeHint = code ? `HTTP ${code}` : '上游返回异常';
         console.error('[火山引擎握手异常]', codeHint);
+        if (streamId) {
+          liveAudioStreams.abort(streamId);
+        }
         sendJson({ type: 'error', text: buildVolcConnectErrorText(`Unexpected server response: ${code || ''}`) });
       });
 
@@ -392,6 +431,9 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
           return;
         }
         sendJson({ type: 'error', text: mode === 'url' ? '链接已提交，但上游在返回完整音频前关闭，请确认链接可公开访问' : '上游连接在返回完整音频前关闭' });
+        if (streamId) {
+          liveAudioStreams.abort(streamId);
+        }
       });
     });
 

@@ -43,6 +43,8 @@
     wsCloseTimer: null,
     wsPingTimer: null,
     nonStreamLastRefreshMs: 0,
+    activeStreamId: '',
+    useHttpStreamMode: false,
     currentPlaceholderIndex: 0,
   };
 
@@ -252,6 +254,30 @@
     return `${protocol}//${location.host}/ws`;
   }
 
+  function resolveHttpStreamBase() {
+    const wsEndpoint = resolveWsEndpoint();
+    const parsed = new URL(wsEndpoint, location.href);
+    parsed.protocol = parsed.protocol === 'wss:' ? 'https:' : 'http:';
+    parsed.pathname = '';
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.toString().replace(/\/$/, '');
+  }
+
+  function shouldUseHttpStreamMode() {
+    const ua = navigator.userAgent || '';
+    const isIOS = /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isSafari = /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
+    return isIOS && isSafari;
+  }
+
+  function createStreamId() {
+    if (window.crypto?.randomUUID) {
+      return window.crypto.randomUUID();
+    }
+    return `stream-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
   function startPlaceholderRotation() {
     const applyPlaceholder = () => {
       const placeholders = getRotatingPlaceholders();
@@ -284,6 +310,8 @@
     state.userPausedPlayback = false;
     state.pendingAudioChunks = [];
     state.nonStreamLastRefreshMs = 0;
+    state.activeStreamId = '';
+    state.useHttpStreamMode = false;
     if (refs.audioPlayer.src) {
       state.programmaticPause = true;
       refs.audioPlayer.pause();
@@ -332,6 +360,7 @@
   }
 
   function refreshNonStreamingPlayer(force = false) {
+    if (state.useHttpStreamMode) return;
     if (state.audioChunks.length === 0) return;
     const now = Date.now();
     if (!force && now - state.nonStreamLastRefreshMs < 1200) return;
@@ -394,6 +423,10 @@
       state.generationTopic = state.generationTopic || state.downloadFileName || '链接播客';
       setBlogTitle(state.generationTopic);
       flushPendingContentAfterTitleResolved();
+    }
+    if (state.useHttpStreamMode) {
+      refs.playerSection.className = 'player-section visible';
+      return;
     }
     state.streamQueue.push(chunk);
     if (!canStreamPlay()) {
@@ -458,6 +491,10 @@
     setDownloadButtonState(true, '下载本次生成的 MP3');
     if (state.mediaSource) {
       finalizeStreamPlayback();
+    } else if (state.useHttpStreamMode) {
+      if (!state.userPausedPlayback && refs.audioPlayer.paused) {
+        refs.audioPlayer.play().catch(() => {});
+      }
     } else {
       const previousObjectUrl = state.objectUrl;
       state.objectUrl = URL.createObjectURL(state.audioBlob);
@@ -534,6 +571,8 @@
     }
 
     setGenerating(true);
+    state.useHttpStreamMode = shouldUseHttpStreamMode();
+    state.activeStreamId = state.useHttpStreamMode ? createStreamId() : '';
     setTranscriptEmpty(state.inputMode === 'url' ? '正在用 AI 压缩播客主题，完成前不会开始播放...' : '正在准备话题并等待第一段对话...');
     if (state.inputMode !== 'url') {
       setBlogTitle(content.slice(0, 50));
@@ -542,6 +581,12 @@
     }
 
     const wsEndpoint = resolveWsEndpoint();
+    if (state.useHttpStreamMode) {
+      refs.playerSection.className = 'player-section visible';
+      refs.audioPlayer.src = `${resolveHttpStreamBase()}/stream/${state.activeStreamId}.mp3`;
+      refs.audioPlayer.load();
+      refs.audioPlayer.play().catch(() => {});
+    }
     let wsOpened = false;
     let wsHadErrorEvent = false;
     let wsHandledError = false;
@@ -574,10 +619,10 @@
         }
       }, 1000);
       if (state.inputMode === 'url') {
-        state.ws.send(JSON.stringify({ type: 'generate', mode: 'url', url, guestGroup: state.selectedGuestGroup }));
+        state.ws.send(JSON.stringify({ type: 'generate', mode: 'url', url, guestGroup: state.selectedGuestGroup, streamId: state.activeStreamId }));
         return;
       }
-      state.ws.send(JSON.stringify({ type: 'generate', mode: 'topic', promptText: content, guestGroup: state.selectedGuestGroup }));
+      state.ws.send(JSON.stringify({ type: 'generate', mode: 'topic', promptText: content, guestGroup: state.selectedGuestGroup, streamId: state.activeStreamId }));
     };
 
     state.ws.onmessage = async (event) => {

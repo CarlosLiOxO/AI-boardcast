@@ -6,6 +6,7 @@ const { loadEnv } = require('./src/config/loadEnv');
 const { applySecurityHeaders } = require('./src/security/httpHeaders');
 const { createWsPolicy, getClientIp, isAllowedWsOrigin } = require('./src/security/wsPolicy');
 const { createPodcastConnectionHandler } = require('./src/ws/handlePodcastConnection');
+const { createLiveAudioStreams } = require('./src/services/liveAudioStreams');
 
 loadEnv(__dirname);
 const { CONFIG } = require('./src/config');
@@ -13,13 +14,17 @@ const { CONFIG } = require('./src/config');
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server, path: '/ws' });
+const liveAudioStreams = createLiveAudioStreams();
 const wsPolicy = createWsPolicy({
   maxConnectionsPerIp: CONFIG.limits.wsMaxConnectionsPerIp,
   maxGeneratesPerMinute: CONFIG.limits.wsMaxGeneratesPerMinute,
 });
-const handlePodcastConnection = createPodcastConnectionHandler({ config: CONFIG, wsPolicy });
+const handlePodcastConnection = createPodcastConnectionHandler({ config: CONFIG, wsPolicy, liveAudioStreams });
 
 applySecurityHeaders(app);
+app.get('/stream/:streamId.mp3', (req, res) => {
+  liveAudioStreams.attachResponse(req.params.streamId, res);
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 wss.on('connection', (clientWs, req) => {
@@ -42,7 +47,8 @@ wss.on('connection', (clientWs, req) => {
   }, 15000);
 
   handlePodcastConnection(clientWs, clientIp);
-  clientWs.on('close', () => {
+  clientWs.on('close', (code, reason) => {
+    console.log(`[客户端断开] ip=${clientIp} code=${code} reason=${reason}`);
     clearInterval(keepAliveTimer);
     wsPolicy.removeConnection(clientIp);
   });
