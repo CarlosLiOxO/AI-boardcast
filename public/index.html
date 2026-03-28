@@ -674,7 +674,8 @@
 
     @media (max-width: 640px) {
       body {
-        padding: 20px 12px 40px;
+        min-height: 100dvh;
+        padding: 20px 12px calc(16px + env(safe-area-inset-bottom, 0px));
       }
       body::before {
         top: -120px;
@@ -708,7 +709,8 @@
         border-radius: 18px;
       }
       .page-footer {
-        margin-top: 16px;
+        margin-top: auto;
+        padding-top: 12px;
         font-size: 12px;
       }
       .card-section,
