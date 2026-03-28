@@ -310,21 +310,40 @@
     return 'MediaSource' in window && MediaSource.isTypeSupported('audio/mpeg');
   }
 
+  function swapAudioSourcePreserveProgress(nextObjectUrl) {
+    const previousTime = Number.isFinite(refs.audioPlayer.currentTime) ? refs.audioPlayer.currentTime : 0;
+    const wasPlaying = !refs.audioPlayer.paused;
+    refs.audioPlayer.src = nextObjectUrl;
+    let restored = false;
+    const restorePlayback = () => {
+      if (restored) return;
+      restored = true;
+      if (previousTime > 0) {
+        const duration = Number.isFinite(refs.audioPlayer.duration) ? refs.audioPlayer.duration : previousTime;
+        const safeTime = Math.max(0, Math.min(previousTime, Math.max(0, duration - 0.15)));
+        try { refs.audioPlayer.currentTime = safeTime; } catch {}
+      }
+      if (!state.userPausedPlayback || wasPlaying) {
+        refs.audioPlayer.play().catch(() => {});
+      }
+    };
+    refs.audioPlayer.addEventListener('loadedmetadata', restorePlayback, { once: true });
+    refs.audioPlayer.addEventListener('canplay', restorePlayback, { once: true });
+  }
+
   function refreshNonStreamingPlayer(force = false) {
     if (state.audioChunks.length === 0) return;
     const now = Date.now();
     if (!force && now - state.nonStreamLastRefreshMs < 1200) return;
     state.nonStreamLastRefreshMs = now;
     buildAudioBlob();
-    if (state.objectUrl) {
-      URL.revokeObjectURL(state.objectUrl);
-    }
+    const previousObjectUrl = state.objectUrl;
     state.objectUrl = URL.createObjectURL(state.audioBlob);
-    refs.audioPlayer.src = state.objectUrl;
-    refs.playerSection.className = 'player-section visible';
-    if (!state.userPausedPlayback) {
-      refs.audioPlayer.play().catch(() => {});
+    swapAudioSourcePreserveProgress(state.objectUrl);
+    if (previousObjectUrl) {
+      URL.revokeObjectURL(previousObjectUrl);
     }
+    refs.playerSection.className = 'player-section visible';
   }
 
   function flushStreamQueue() {
@@ -440,10 +459,11 @@
     if (state.mediaSource) {
       finalizeStreamPlayback();
     } else {
+      const previousObjectUrl = state.objectUrl;
       state.objectUrl = URL.createObjectURL(state.audioBlob);
-      refs.audioPlayer.src = state.objectUrl;
-      if (!state.userPausedPlayback) {
-        refs.audioPlayer.play().catch(() => {});
+      swapAudioSourcePreserveProgress(state.objectUrl);
+      if (previousObjectUrl) {
+        URL.revokeObjectURL(previousObjectUrl);
       }
     }
 
