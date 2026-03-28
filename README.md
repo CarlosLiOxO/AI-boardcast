@@ -18,13 +18,19 @@
 - `RESOURCE_ID`：播客语音合成资源 ID，默认 `volc.service_type.10050`
 - `WS_ALLOWED_ORIGINS`：可选，允许连接后端 WS 的前端来源，逗号分隔
 
-## Netlify 部署准备
+## Railway 部署
 
-- 前端可部署到 Netlify，后端 WebSocket 服务需独立部署在可长期运行 Node 进程的平台
-- 已提供 `netlify.toml`，发布目录为 `public`
-- Netlify 构建时会执行 `npm run build:netlify` 生成 `public/runtime-config.js`
-- 在 Netlify 环境变量中配置：
+- 推荐只部署到 Railway，由同一个 Node 服务同时提供页面和 WebSocket
+- Railway 访问页面时，前端会默认连接当前域名下的 `/ws`
+- 单 Railway 部署通常不需要配置：
+  - `PUBLIC_WS_BASE_URL`
+  - `WS_ALLOWED_ORIGINS`
+- 启动命令保持为 `node server.js`
+- 部署后直接访问 Railway 分配的域名即可
+
+## 分离部署
+
+- 只有前后端拆开部署时，才需要配置：
   - `PUBLIC_WS_BASE_URL`：后端服务地址，如 `https://your-api.example.com`
-- 在后端环境变量中配置：
-  - `WS_ALLOWED_ORIGINS`：例如 `https://your-site.netlify.app`
+  - `WS_ALLOWED_ORIGINS`：允许连接后端 WS 的前端来源
 - 前端会自动将 `PUBLIC_WS_BASE_URL` 转换为对应的 `ws/wss` 并拼接 `/ws`

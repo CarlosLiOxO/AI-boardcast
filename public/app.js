@@ -221,7 +221,8 @@
 
   function resolveWsEndpoint() {
     const isLocalPage = ['localhost', '127.0.0.1'].includes(location.hostname);
-    if (isLocalPage) {
+    const isRailwayPage = location.hostname.endsWith('.up.railway.app');
+    if (isLocalPage || isRailwayPage) {
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       return `${protocol}//${location.host}/ws`;
     }
