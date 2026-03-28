@@ -536,15 +536,23 @@
       state.ws.send(JSON.stringify({ type: 'generate', mode: 'topic', promptText: content, guestGroup: state.selectedGuestGroup }));
     };
 
-    state.ws.onmessage = (event) => {
+    state.ws.onmessage = async (event) => {
+      if (event.data instanceof Blob) {
+        const arrayBuffer = await event.data.arrayBuffer();
+        appendAudioChunk(new Uint8Array(arrayBuffer));
+        return;
+      }
       if (event.data instanceof ArrayBuffer) {
         appendAudioChunk(new Uint8Array(event.data));
+        return;
+      }
+      if (!(typeof event.data === 'string' || event.data instanceof String)) {
         return;
       }
 
       let msg;
       try {
-        msg = JSON.parse(event.data);
+        msg = JSON.parse(String(event.data));
       } catch {
         return;
       }
