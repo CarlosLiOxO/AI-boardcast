@@ -16,6 +16,8 @@ const CONFIG = {
     maxUrlRedirects: 5,
     wsMaxConnectionsPerIp: 3,
     wsMaxGeneratesPerMinute: 5,
+    wsAudioIdleCloseMs: Number(process.env.WS_AUDIO_IDLE_CLOSE_MS || 3000),
+    wsMaxAudioStreamMs: Number(process.env.WS_MAX_AUDIO_STREAM_MS || 105000),
   },
   security: {
     wsAllowedOrigins: (process.env.WS_ALLOWED_ORIGINS || '')

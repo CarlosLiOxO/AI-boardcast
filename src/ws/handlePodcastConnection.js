@@ -32,12 +32,70 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
       let hasErrored = false;
       let isSessionFinished = false;
       let hasSeenTerminalSignal = false;
+      let lastControlFrames = [];
       let progressHeartbeatTimer = null;
+      let audioSilenceTimer = null;
+      let hardStopTimer = null;
+
+      const pushControlFrameLog = (frame) => {
+        lastControlFrames.push(frame);
+        if (lastControlFrames.length > 8) {
+          lastControlFrames = lastControlFrames.slice(-8);
+        }
+      };
 
       const stopProgressHeartbeat = () => {
         if (!progressHeartbeatTimer) return;
         clearInterval(progressHeartbeatTimer);
         progressHeartbeatTimer = null;
+      };
+
+      const stopAudioSilenceTimer = () => {
+        if (!audioSilenceTimer) return;
+        clearTimeout(audioSilenceTimer);
+        audioSilenceTimer = null;
+      };
+
+      const stopHardStopTimer = () => {
+        if (!hardStopTimer) return;
+        clearTimeout(hardStopTimer);
+        hardStopTimer = null;
+      };
+
+      const closeUpstream = () => {
+        if (!volcWs || volcWs.readyState >= WebSocket.CLOSING) return;
+        try {
+          volcWs.close();
+        } catch {}
+      };
+
+      const scheduleAudioSilenceTimeout = () => {
+        stopAudioSilenceTimer();
+        if (!hasReceivedAudio || hasSentDone || hasErrored) return;
+        audioSilenceTimer = setTimeout(() => {
+          if (hasSentDone || hasErrored || !hasReceivedAudio) return;
+          hasSeenTerminalSignal = true;
+          sendJson({ type: 'status', text: '音频流暂时停止，正在自动完成收尾...' });
+          finishStream();
+          closeUpstream();
+        }, config.limits.wsAudioIdleCloseMs);
+      };
+
+      const scheduleHardStopTimeout = () => {
+        if (hardStopTimer || hasSentDone || hasErrored) return;
+        hardStopTimer = setTimeout(() => {
+          if (hasSentDone || hasErrored) return;
+          if (hasReceivedAudio) {
+            hasSeenTerminalSignal = true;
+            sendJson({ type: 'status', text: '已达到单次最长音频时长，正在使用当前已生成内容完成收尾...' });
+            finishStream();
+            closeUpstream();
+            return;
+          }
+          hasErrored = true;
+          sendJson({ type: 'error', text: '生成等待时间过长且未收到音频，请稍后重试' });
+          closeUpstream();
+        }, config.limits.wsMaxAudioStreamMs);
       };
 
       const startProgressHeartbeat = () => {
@@ -60,6 +118,8 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
         if (hasSentDone || hasErrored) return;
         hasSentDone = true;
         stopProgressHeartbeat();
+        stopAudioSilenceTimer();
+        stopHardStopTimer();
         sendJson({ type: 'done' });
       };
 
@@ -192,6 +252,8 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
 
         if (msgType === 0xb || event === EVENT.PODCAST_ROUND_RESPONSE) {
           hasReceivedAudio = true;
+          scheduleHardStopTimeout();
+          scheduleAudioSilenceTimeout();
           if (clientWs.readyState === WebSocket.OPEN) {
             clientWs.send(payload, { binary: true });
           }
@@ -231,6 +293,8 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
 
         if (json.data) {
           hasReceivedAudio = true;
+          scheduleHardStopTimeout();
+          scheduleAudioSilenceTimeout();
           const audioData = Buffer.from(json.data, 'base64');
           if (clientWs.readyState === WebSocket.OPEN) {
             clientWs.send(audioData, { binary: true });
@@ -258,6 +322,15 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
           finishStream();
         }
 
+        pushControlFrameLog({
+          msgType,
+          event,
+          is_last_package: Boolean(json.is_last_package),
+          is_end: Boolean(json.is_end),
+          finish_reason: json.finish_reason || null,
+          hasData: Boolean(json.data),
+          round_id: json.round_id ?? null,
+        });
         console.log('[控制帧] msgType:', msgType, 'json:', JSON.stringify(json).slice(0, 200));
       });
 
@@ -265,12 +338,16 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
         console.error('[火山引擎连接错误]', err.message);
         hasErrored = true;
         stopProgressHeartbeat();
+        stopAudioSilenceTimer();
+        stopHardStopTimer();
         sendJson({ type: 'error', text: buildVolcConnectErrorText(err.message) });
       });
 
       volcWs.on('unexpected-response', (_request, response) => {
         hasErrored = true;
         stopProgressHeartbeat();
+        stopAudioSilenceTimer();
+        stopHardStopTimer();
         const code = response?.statusCode;
         const codeHint = code ? `HTTP ${code}` : '上游返回异常';
         console.error('[火山引擎握手异常]', codeHint);
@@ -279,9 +356,17 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
 
       volcWs.on('close', (code, reason) => {
         console.log(`[火山引擎连接关闭] code=${code} reason=${reason}`);
+        console.log('[结束帧回顾]', JSON.stringify(lastControlFrames));
         stopProgressHeartbeat();
+        stopAudioSilenceTimer();
+        stopHardStopTimer();
         if (hasErrored || hasSentDone) return;
         if (isSessionFinished || hasSeenTerminalSignal) {
+          finishStream();
+          return;
+        }
+        if (hasReceivedAudio && code === 1000) {
+          sendJson({ type: 'status', text: '音频流已结束，正在完成收尾...' });
           finishStream();
           return;
         }
