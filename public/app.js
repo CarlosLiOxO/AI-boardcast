@@ -41,6 +41,7 @@
     toastTimer: null,
     placeholderTimer: null,
     wsCloseTimer: null,
+    wsPingTimer: null,
     currentPlaceholderIndex: 0,
   };
 
@@ -267,6 +268,8 @@
   function resetAudioState() {
     clearTimeout(state.wsCloseTimer);
     state.wsCloseTimer = null;
+    clearInterval(state.wsPingTimer);
+    state.wsPingTimer = null;
     state.audioChunks = [];
     state.audioBlob = null;
     state.downloadFileName = '';
@@ -420,6 +423,8 @@
 
     if (state.ws) {
       const wsToClose = state.ws;
+      clearInterval(state.wsPingTimer);
+      state.wsPingTimer = null;
       clearTimeout(state.wsCloseTimer);
       state.wsCloseTimer = setTimeout(() => {
         if (wsToClose.readyState === WebSocket.OPEN || wsToClose.readyState === WebSocket.CONNECTING) {
@@ -433,6 +438,8 @@
   function onGenerateError(errText) {
     state.hasCompleted = true;
     setGenerating(false);
+    clearInterval(state.wsPingTimer);
+    state.wsPingTimer = null;
     setDownloadButtonState(false, '生成失败，暂无可下载文件');
     if (state.inputMode === 'url' && !state.isUrlTitleResolved) {
       setBlogTitle('标题提炼失败，请更换链接后重试');
@@ -503,6 +510,16 @@
 
     state.ws.onopen = () => {
       wsOpened = true;
+      const wsRef = state.ws;
+      clearInterval(state.wsPingTimer);
+      state.wsPingTimer = setInterval(() => {
+        if (state.ws !== wsRef || !state.generating || wsRef.readyState !== WebSocket.OPEN) {
+          clearInterval(state.wsPingTimer);
+          state.wsPingTimer = null;
+          return;
+        }
+        wsRef.send(JSON.stringify({ type: 'ping' }));
+      }, 2000);
       if (state.inputMode === 'url') {
         state.ws.send(JSON.stringify({ type: 'generate', mode: 'url', url, guestGroup: state.selectedGuestGroup }));
         return;
@@ -573,6 +590,8 @@
       }, 300);
     };
     state.ws.onclose = (event) => {
+      clearInterval(state.wsPingTimer);
+      state.wsPingTimer = null;
       if (!state.generating) return;
       if (event.code === 1008) {
         failWsOnce(`连接被后端拒绝（1008）。请在后端 WS_ALLOWED_ORIGINS 加入：${location.origin}`);
