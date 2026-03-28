@@ -391,14 +391,11 @@
     state.hasCompleted = true;
     setGenerating(false);
 
-    if (state.inputMode === 'url' && !state.isUrlTitleResolved) {
-      setDownloadButtonState(false, '标题提炼失败，请更换链接后重试');
-      setBlogTitle('标题提炼失败，请更换链接后重试');
-      if (state.ws) {
-        state.ws.onclose = null;
-        state.ws.close();
-      }
-      return;
+    if (state.inputMode === 'url' && !state.isUrlTitleResolved && state.hasReceivedAudio && state.audioChunks.length > 0) {
+      state.isUrlTitleResolved = true;
+      state.generationTopic = state.generationTopic || state.downloadFileName || '链接播客';
+      setBlogTitle(state.generationTopic);
+      flushPendingContentAfterTitleResolved();
     }
 
     if (!state.hasReceivedAudio || state.audioChunks.length === 0) {
@@ -535,12 +532,18 @@
           setBlogTitle(msg.blogTitle);
         }
         if (state.inputMode === 'url') {
-          if (msg.titleReady && msg.blogTitle) {
+          if (msg.blogTitle && !state.isUrlTitleResolved) {
             state.isUrlTitleResolved = true;
             state.generationTopic = msg.blogTitle;
             setBlogTitle(msg.blogTitle);
             flushPendingContentAfterTitleResolved();
-          } else {
+          } else if (msg.titleReady && msg.blogTitle) {
+            state.isUrlTitleResolved = true;
+            state.generationTopic = msg.blogTitle;
+            setBlogTitle(msg.blogTitle);
+          } else if (!state.isUrlTitleResolved) {
+            state.generationTopic = state.generationTopic || msg.downloadName || '链接播客';
+            setBlogTitle('正在压缩播客主题...');
             setTranscriptEmpty('正在用 AI 压缩播客主题，完成前不会开始播放...');
           }
         } else if (state.inputMode !== 'url' && msg.downloadName) {
