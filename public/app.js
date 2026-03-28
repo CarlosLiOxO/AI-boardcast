@@ -42,6 +42,7 @@
     placeholderTimer: null,
     wsCloseTimer: null,
     wsPingTimer: null,
+    nonStreamLastRefreshMs: 0,
     currentPlaceholderIndex: 0,
   };
 
@@ -282,6 +283,7 @@
     state.mediaSource = null;
     state.userPausedPlayback = false;
     state.pendingAudioChunks = [];
+    state.nonStreamLastRefreshMs = 0;
     if (refs.audioPlayer.src) {
       state.programmaticPause = true;
       refs.audioPlayer.pause();
@@ -306,6 +308,23 @@
 
   function canStreamPlay() {
     return 'MediaSource' in window && MediaSource.isTypeSupported('audio/mpeg');
+  }
+
+  function refreshNonStreamingPlayer(force = false) {
+    if (state.audioChunks.length === 0) return;
+    const now = Date.now();
+    if (!force && now - state.nonStreamLastRefreshMs < 1200) return;
+    state.nonStreamLastRefreshMs = now;
+    buildAudioBlob();
+    if (state.objectUrl) {
+      URL.revokeObjectURL(state.objectUrl);
+    }
+    state.objectUrl = URL.createObjectURL(state.audioBlob);
+    refs.audioPlayer.src = state.objectUrl;
+    refs.playerSection.className = 'player-section visible';
+    if (!state.userPausedPlayback) {
+      refs.audioPlayer.play().catch(() => {});
+    }
   }
 
   function flushStreamQueue() {
@@ -358,6 +377,10 @@
       flushPendingContentAfterTitleResolved();
     }
     state.streamQueue.push(chunk);
+    if (!canStreamPlay()) {
+      refreshNonStreamingPlayer();
+      return;
+    }
     ensureStreamingPlayer();
     if (!state.sourceBuffer) {
       return;
@@ -410,6 +433,7 @@
     }
 
     buildAudioBlob();
+    state.nonStreamLastRefreshMs = Date.now();
     setBlogTitle(state.generationTopic || '本次播客');
     refs.playerSection.className = 'player-section visible';
     setDownloadButtonState(true, '下载本次生成的 MP3');
