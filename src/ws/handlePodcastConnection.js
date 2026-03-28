@@ -31,6 +31,7 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
       let hasSentDone = false;
       let hasErrored = false;
       let isSessionFinished = false;
+      let hasSeenTerminalSignal = false;
       let progressHeartbeatTimer = null;
 
       const stopProgressHeartbeat = () => {
@@ -228,13 +229,6 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
           }
         }
 
-        if (event === EVENT.PODCAST_END) {
-          sendJson({ type: 'status', text: '播客内容生成完成，正在收尾音频...' });
-          if (hasReceivedAudio) {
-            finishStream();
-          }
-        }
-
         if (json.data) {
           hasReceivedAudio = true;
           const audioData = Buffer.from(json.data, 'base64');
@@ -243,16 +237,24 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
           }
         }
 
+        if (event === EVENT.PODCAST_END) {
+          hasSeenTerminalSignal = true;
+          sendJson({ type: 'status', text: '播客内容生成完成，正在收尾音频...' });
+        }
+
         if (event === EVENT.SESSION_FINISHED || event === EVENT.CONNECTION_FINISHED) {
           isSessionFinished = true;
+          hasSeenTerminalSignal = true;
         }
 
         if (
+          event === EVENT.PODCAST_END ||
           isSessionFinished ||
           json.is_last_package ||
           json.is_end ||
           json.finish_reason === 'stop'
         ) {
+          hasSeenTerminalSignal = true;
           finishStream();
         }
 
@@ -279,8 +281,12 @@ function createPodcastConnectionHandler({ config, wsPolicy }) {
         console.log(`[火山引擎连接关闭] code=${code} reason=${reason}`);
         stopProgressHeartbeat();
         if (hasErrored || hasSentDone) return;
-        if (isSessionFinished || hasReceivedAudio) {
+        if (isSessionFinished || hasSeenTerminalSignal) {
           finishStream();
+          return;
+        }
+        if (hasReceivedAudio) {
+          sendJson({ type: 'error', text: mode === 'url' ? '链接音频生成中断，已收到部分音频但未完整收尾，请重试' : '播客音频生成中断，已收到部分音频但未完整收尾，请重试' });
           return;
         }
         sendJson({ type: 'error', text: mode === 'url' ? '链接已提交，但上游在返回完整音频前关闭，请确认链接可公开访问' : '上游连接在返回完整音频前关闭' });

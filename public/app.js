@@ -40,6 +40,7 @@
     pendingAudioChunks: [],
     toastTimer: null,
     placeholderTimer: null,
+    wsCloseTimer: null,
     currentPlaceholderIndex: 0,
   };
 
@@ -263,6 +264,8 @@
   }
 
   function resetAudioState() {
+    clearTimeout(state.wsCloseTimer);
+    state.wsCloseTimer = null;
     state.audioChunks = [];
     state.audioBlob = null;
     state.downloadFileName = '';
@@ -418,8 +421,14 @@
     }
 
     if (state.ws) {
-      state.ws.onclose = null;
-      state.ws.close();
+      const wsToClose = state.ws;
+      clearTimeout(state.wsCloseTimer);
+      state.wsCloseTimer = setTimeout(() => {
+        if (wsToClose.readyState === WebSocket.OPEN || wsToClose.readyState === WebSocket.CONNECTING) {
+          wsToClose.onclose = null;
+          wsToClose.close();
+        }
+      }, 1200);
     }
   }
 
